@@ -1,0 +1,559 @@
+Sub Do_Everything()
+
+' DELETES ALL ROWS FROM A2 DOWNWARDS WITH THE WORD DEPOSIT001
+
+'
+
+    Last = Cells(Rows.Count, "C").End(xlUp).Row
+
+    For I = Last To 1 Step -1
+
+        '====================================================================
+
+        'You would need to change C to Account Nbr column. Leave the A alone!
+
+        '====================================================================
+
+        If (Cells(I, "C").Value) = "DEPOSIT001" Then
+
+            Cells(I, "A").EntireRow.Delete
+
+        End If
+
+    Next
+
+ 
+
+Call Split_Terms
+
+For j = 1 To Worksheets.Count
+
+       Sheets(j).Activate
+
+       Call Format_Statement
+
+       Call CreateEventProcedure(ActiveWorkbook.Sheets(j).name)
+
+Next j
+
+End Sub
+
+ 
+
+ 
+
+'<<<<  Create a new sheet for every Unique value or paste it below the existing data if the sheet exists  >>>>>
+
+ 
+
+'This example copy all rows with the same value in the first column of
+
+'the range to a new worksheet. It will do this for every unique value.
+
+'The sheets will be named after the Unique value.
+
+'If the sheet already exists the data will be pasted below the existing data on that worksheet.
+
+'Note: this example use the function LastRow and SheetExists in the ModReset module
+
+ 
+
+Private Sub Split_Terms()
+
+'Note: This macro use the function LastRow and SheetExists
+
+    Dim My_Range As range
+
+    Dim FieldNum As Long
+
+    Dim CalcMode As Long
+
+    Dim ViewMode As Long
+
+    Dim ws2 As Worksheet
+
+    Dim Lrow As Long
+
+    Dim cell As range
+
+    Dim CCount As Long
+
+    Dim WSNew As Worksheet
+
+    Dim ErrNum As Long
+
+    Dim DestRange As range
+
+    Dim LR As Long
+
+    'Set filter range on ActiveSheet: A11 is the top left cell of your filter range
+
+    'and the header of the first column, D is the last column in the filter range.
+
+    'You can also add the sheet name to the code like this :
+
+    'Worksheets("Sheet1").Range("A11:D" & LastRow(Worksheets("Sheet1")))
+
+    'No need that the sheet is active then when you run the macro when you use this.
+
+    '===============================================================================
+
+    'I dont think you need to change it but you might.
+
+    '================================================================================
+
+    Set My_Range = range("A1:E" & lastRow(ActiveSheet))
+
+    My_Range.Parent.Select
+
+ 
+
+    If ActiveWorkbook.ProtectStructure = True Or _
+
+       My_Range.Parent.ProtectContents = True Then
+
+        MsgBox "Sorry, not working when the workbook or worksheet is protected", _
+
+               vbOKOnly, "Copy to new worksheet"
+
+        Exit Sub
+
+    End If
+
+ 
+
+    'This example filters on the first column in the range(change the field if needed)
+
+    'In this case the range starts in A so Field:=1 is column A, 2 = column B, ......
+
+    '========================================================================
+
+    'Change the number below if the Account Term is not in the 4th column (D)
+
+    '=========================================================================
+
+    FieldNum = 4
+
+ 
+
+ 
+
+ 
+
+    'Turn off AutoFilter
+
+    My_Range.Parent.AutoFilterMode = False
+
+    'Change ScreenUpdating, Calculation, EnableEvents, ....
+
+    With Application
+
+        CalcMode = .Calculation
+
+        .Calculation = xlCalculationManual
+
+        .ScreenUpdating = False
+
+        .EnableEvents = False
+
+    End With
+
+    ViewMode = ActiveWindow.View
+
+    ActiveWindow.View = xlNormalView
+
+    ActiveSheet.DisplayPageBreaks = False
+
+    'Add a worksheet to copy the a unique list and add the CriteriaRange
+
+    Set ws2 = Worksheets.Add
+
+    With ws2
+
+        'first we copy the Unique data from the filter field to ws2
+
+        My_Range.Columns(FieldNum).AdvancedFilter _
+
+                Action:=xlFilterCopy, _
+
+                CopyToRange:=.range("A1"), Unique:=True
+
+        'loop through the unique list in ws2 and filter/copy to a new sheet
+
+        Lrow = .Cells(Rows.Count, "A").End(xlUp).Row
+
+        For Each cell In .range("A2:A" & Lrow)
+
+            My_Range.Parent.Select
+
+            'Filter the range
+
+            My_Range.AutoFilter Field:=FieldNum, Criteria1:="=" & _
+
+                                                            Replace(Replace(Replace(cell.Value, "~", "~~"), "*", "~*"), "?", "~?")
+
+ 
+
+            'Check if there are no more then 8192 areas(limit of areas)
+
+            CCount = 0
+
+            On Error Resume Next
+
+            CCount = My_Range.Columns(1).SpecialCells(xlCellTypeVisible) _
+
+                     .Areas(1).Cells.Count
+
+            On Error GoTo 0
+
+            If CCount = 0 Then
+
+                MsgBox "There are more than 8192 areas for the value: " & cell.Value _
+
+                     & vbNewLine & "It is not possible to copy the visible data." _
+
+                     & vbNewLine & "Tip: Sort your data before you use this macro.", _
+
+                       vbOKOnly, "Split in worksheets"
+
+            Else
+
+               'Add a new worksheet or set a reference to a existing sheet
+
+                If SheetExists(cell.Text) = False Then
+
+                    Set WSNew = Worksheets.Add(after:=Sheets(Sheets.Count))
+
+                    On Error Resume Next
+
+                    WSNew.name = cell.Value
+
+                  
+
+                    If Err.Number > 0 Then
+
+                        ErrNum = ErrNum + 1
+
+                        WSNew.name = "Error_" & Format(ErrNum, "0000")
+
+                        Err.Clear
+
+                    End If
+
+                    On Error GoTo 0
+
+                    Set DestRange = WSNew.range("A1")
+
+                Else
+
+                    Set WSNew = Sheets(cell.Text)
+
+                    LR = lastRow(WSNew)
+
+                    Set DestRange = WSNew.range("A" & LR + 1)
+
+                End If
+
+                'Copy the visible data to the worksheet
+
+                My_Range.SpecialCells(xlCellTypeVisible).Copy
+
+                With DestRange
+
+                    .Parent.Select
+
+                    ' Paste:=8 will copy the columnwidth in Excel 2000 and higher
+
+                    ' Remove this line if you use Excel 97
+
+                    .PasteSpecial Paste:=8
+
+                    .PasteSpecial xlPasteValues
+
+                    .PasteSpecial xlPasteFormats
+
+                    Application.CutCopyMode = False
+
+                    .Select
+
+                End With
+
+            End If
+
+            ' Delete the header row if you copy to a existing worksheet
+
+            If LR > 1 Then WSNew.range("A" & LR + 1).EntireRow.Delete
+
+            'Show all data in the range
+
+            My_Range.AutoFilter Field:=FieldNum
+
+ 
+
+        Next cell
+
+ 
+
+        'Delete the ws2 sheet
+
+        On Error Resume Next
+
+        Application.DisplayAlerts = False
+
+        .Delete
+
+        Application.DisplayAlerts = True
+
+        On Error GoTo 0
+
+ 
+
+    End With
+
+    'Turn off AutoFilter
+
+    My_Range.Parent.AutoFilterMode = False
+
+    If ErrNum > 0 Then
+
+        MsgBox "Rename every WorkSheet name that start with ""Error_"" manually" _
+
+             & vbNewLine & "There are characters in the name that are not allowed" _
+
+             & vbNewLine & "in a sheet name or the worksheet already exist."
+
+    End If
+
+    'Restore ScreenUpdating, Calculation, EnableEvents, ....
+
+    My_Range.Parent.Select
+
+    ActiveWindow.View = ViewMode
+
+    With Application
+
+        .ScreenUpdating = True
+
+        .EnableEvents = True
+
+        .Calculation = CalcMode
+
+    End With
+
+End Sub
+
+ 
+
+Function lastRow(sh As Worksheet)
+
+    On Error Resume Next
+
+    lastRow = sh.Cells.Find(What:="*", _
+
+                            after:=sh.range("A1"), _
+
+                            Lookat:=xlPart, _
+
+                            LookIn:=xlValues, _
+
+                            SearchOrder:=xlByRows, _
+
+                            SearchDirection:=xlPrevious, _
+
+                            MatchCase:=False).Row
+
+    On Error GoTo 0
+
+End Function
+
+ 
+
+Function SheetExists(SName As String, _
+
+                     Optional ByVal WB As Workbook) As Boolean
+
+'Chip Pearson
+
+    On Error Resume Next
+
+    If WB Is Nothing Then Set WB = ThisWorkbook
+
+    SheetExists = CBool(Len(WB.Sheets(SName).name))
+
+End Function
+
+ 
+
+Sub Format_Statement()
+
+    '==============================================================================
+
+    'Dont remember what this does exactly. But it depends on the Item Amount column.
+
+    'If Item amount is not in the E column, change the code.
+
+    '==============================================================================
+
+    LR = range("E" & Rows.Count).End(xlUp).Row
+
+    '==============================================================================
+
+    'Creating the Running total header in the F column. If the F column is not
+
+    'available, i.e. already had something in it. Change the column letter and keep the number
+
+    '==============================================================================
+
+    range("F1") = "Running Total"
+
+    range("F1").Borders.Weight = xlThin
+
+    range("F1").Font.Bold = True
+
+    '==============================================================================
+
+    'Doing the formula for Running Total column. Change column letter if necessary but keep the numbers
+
+    '==============================================================================
+
+    range("F2").FormulaR1C1 = "=RC[-1]"
+
+    range("F3:F" & LR).FormulaR1C1 = "=R[-1]C+RC[-1]"
+
+ 
+
+    '==============================================================================
+
+    'Adding the border. Change column letter if necessary but keep the numbers
+
+    '==============================================================================
+
+    range("F2:F" & LR).Borders.Weight = xlThin
+
+    '==============================================================================
+
+    'This formats the Item Amount Column and the Running Total Column to be Currency
+
+    'Change column letter if necessary but keep the numbers
+
+    '===============================================================================
+
+    Columns("E:E").NumberFormat = "#,###.00;[Red](#,###.00);0.00"
+
+    Columns("E:E").EntireColumn.AutoFit
+
+    Columns("F:F").NumberFormat = "#,###.00;[Red](#,###.00);0.00"
+
+    Columns("F:F").EntireColumn.AutoFit
+
+ 
+
+End Sub
+
+ 
+
+Public Sub AddSheet(ByVal name As String)
+
+With ActiveWorkbook.Sheets
+
+.Add after:=Worksheets(Worksheets.Count)
+
+ActiveSheet.name = name
+
+MsgBox name
+
+Call CreateEventProcedure(name)
+
+End With
+
+End Sub
+
+ 
+
+ 
+
+Public Sub CreateEventProcedure(ByVal name As String)
+
+ 
+
+    Dim Cname As Variant
+
+    Dim range As range
+
+    Dim lastRow As Variant
+
+    Dim code As Variant
+
+    Set Ctrl = Application.VBE.CommandBars.FindControl(ID:=578)
+
+    If Ctrl.Enabled = True Then Ctrl.Execute
+
+  
+
+    Cname = ActiveWorkbook.Sheets(name).CodeName
+
+    With ThisWorkbook.Sheets("WorkSheet")
+
+        lastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+
+    End With
+
+  
+
+    Set range = ThisWorkbook.Sheets("WorkSheet").range(Cells(1, 1).Address, Cells(lastRow, 2).Address)
+
+  
+
+    code = ""
+
+    code = "Private Sub Worksheet_SelectionChange(ByVal Target As Range)" & vbCrLf
+
+    code = code & " Dim mergedRng As Range" & vbCrLf
+
+    code = code & "" & vbCrLf
+
+    code = code & " If Not Intersect(Target, Columns(2)) Is Nothing Then" & vbCrLf
+
+    code = code & "     ActiveSheet.Cells(4, 9).Value = Target.Value" & vbCrLf
+
+    code = code & "     ActiveSheet.Cells(4, 9).Columns.AutoFit" & vbCrLf
+
+    code = code & " Set mergedRng = ActiveSheet.Range(Cells(4, 10).Address, Cells(10, 15).Address)" & vbCrLf
+
+    code = code & " With mergedRng" & vbCrLf
+
+    code = code & "     .MergeCells = True" & vbCrLf
+
+    code = code & "     .VerticalAlignment = xlTop" & vbCrLf
+
+    code = code & "     .WrapText = True" & vbCrLf
+
+    code = code & "     .Columns.AutoFit" & vbCrLf
+
+    code = code & "      .formula = ""=vlookup(I4, [PERSONAL.xlsb]Worksheet!"
+
+    code = code & range.Address(False, False)
+
+    code = code & ", 2, false)""" & vbCrLf
+
+    code = code & " End With" & vbCrLf
+
+    code = code & "" & vbCrLf
+
+    code = code & " End If" & vbCrLf
+
+    code = code & "End Sub" & vbCrLf
+
+  
+
+    'Write code for button
+
+    MsgBox Cname
+
+    ActiveWorkbook.VBProject.VBComponents(Cname).CodeModule.AddFromString code
+
+ 
+
+ 
+
+End Sub
